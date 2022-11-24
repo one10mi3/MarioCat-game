@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>marioCat</title>
+  <style>
+    canvas {
+      margin: 100px auto;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  
+<script type="module">
+  "use strict";
+  import kaboom from "https://unpkg.com/kaboom/dist/kaboom.mjs";
+
+  kaboom({
+    background: [135, 206, 250],
+    width: 320,
+    height: 240,
+    scale: 2,
+  });
+
+  loadRoot("sprites/");
+  loadSprite("cat", "cat.png");
+  loadSprite("enemy_cat", "enemy_cat.png");
+  loadSprite("boss_cat", "boss_cat.png");
+  loadSprite("ground", "ground.png");//土
+  loadSprite("questionBox", "questionBox.png");
+  loadSprite("emptyBox", "emptyBox.png");
+  loadSprite("brick", "brick.png");
+  loadSprite("coin", "coin.png");
+  loadSprite("pipe", "pipe.png");//ドカン
+  loadSprite("pipeTop", "pipeTop.png");//ドカン上
+  loadSprite("pipeBottom", "pipeBottom.png");//ドカン下
+  loadSprite("shrubbery", "shrubbery.png");
+  loadSprite("hill", "hill.png");
+  loadSprite("cloud", "cloud.png");
+  loadSprite("house", "house1.png");
+  loadSprite("pole", "pole.png");
+  loadSprite("bill", "bill.png");
+  loadSprite("office", "office.png");
+  loadSprite("fuji", "fuji.png");
+  loadSprite("fish", "fish.png");
+  
+  // // loadSprite("froggy", "sprites/froggy.png");
+  // loadSound("cat_8bit", "../sounds/cat_8bit.mp3");
+
+
+
+  // スタート画面
+  scene("start", () => {
+    add([
+      text("marioCat", { size: 16 }),
+      pos(vec2(160, 110)),
+      origin("center"),
+      color(255, 255, 255),
+    ]);
+    add([
+      text("Press enter to start", { size: 16 }),
+      pos(vec2(160, 140)),
+      origin("center"),
+      color(255, 255, 255),
+    ]);
+    setData("life", 3);
+    onKeyDown("enter", () => {
+      go("game");
+      localStorage.removeItem('stage0');
+      localStorage.removeItem('stage1');
+      localStorage.removeItem('stage2');
+    })
+  });
+  go("start");
+
+  
+
+  function addBg(image = "cloud", posx = 400, posy = 80, bg = "bg", size = 1, ori = left){
+    add([
+      sprite(image),
+      pos(posx, posy),
+      layer(bg),
+      scale(size),
+      origin(ori)
+    ]);
+  }
+  function rx() {
+    let rx = 5 + Math.floor( Math.random() * 2500 );
+    if (rx <= 350 && rx >= 200 || rx <= 1500 && rx >= 1000) {
+      rx = 3000;
+    } 
+    return rx;
+  }
+  function ry() {
+    let ry = 20 + Math.floor( Math.random() * 110 );
+    return ry;
+  }
+
+  // メイン画面
+  scene("game", (levelNumber = 0) => {
+
+    setTimer();
+    setData("level", levelNumber);
+
+    layers([
+      "bg",
+      "game",
+      "ui",
+    ], "game");
+    
+    // 背景ランダム
+    for ( let i = 0;  i <= 3;  i++ ) { addBg("hill", rx(), 208, "bg", 1.2, "bot"); }
+    for ( let i = 0;  i <= 10;  i++ ) { addBg("shrubbery", rx(), 208, "bg", 1, "bot"); }
+    for ( let i = 0;  i <= 20;  i++ ) { addBg("cloud", rx(), ry(), "bg", 1, "left"); } 
+
+    let num = levelNumber;
+    add([
+      text("Stage " + (num + 1), { size: 16 }),
+      pos(vec2(160, 120)),
+      color(255, 255, 255),
+      origin("center"),
+      layer('ui'),
+      lifespan(1, { fade: 1 })
+    ]);
+
+    if (levelNumber == 2) {
+      add([
+        text("Bonus", { size: 16 }),
+        pos(vec2(160, 150)),
+        color(255, 255, 255),
+        origin("center"),
+        layer('ui'),
+        lifespan(1, { fade: 1 })
+      ]);
+    }
+
+    const level = addLevel(MAPS[levelNumber], levelConf);
+    const player = level.spawn("p", 1, 10);
+    let heart = getData("life"); 
+
+    // 残ハートを表示
+    const heartTitle = add ([
+        text("LIFE:", { size: 8, font: "sink"}),
+        pos(284, 25),
+        origin("center"),
+        layer("ui"),
+    ]);
+    const heartText = add ([
+        text(heart, { size: 8, font: "sink"}),
+        pos(306, 25),
+        origin("center"),
+        layer("ui"),
+    ]);
+
+    const SPEED = 120;
+    let isJumping = false;
+
+    onKeyDown("right", () => {
+      if (player.isFrozen) return;
+      player.flipX(false);
+      player.move(SPEED, 0);
+    });
+    onKeyDown("left", () => {
+      if (player.isFrozen) return;
+      player.flipX(true);
+      if (toScreen(player.pos).x > 1) {
+        player.move(-SPEED, 0);
+      }
+    });
+    onKeyPress("space", () => {
+      if (player.grounded()) {
+        if(player.moveUp){
+          isJumping = true;
+        }
+        player.jump(500);
+      }
+    });
+
+    // カメラスクロール
+    player.onUpdate(() => {
+      let currCam = camPos();
+      let origin_scoreTitle = player.pos.x + 60;
+      let origin_scoreText = player.pos.x + 100;
+      let origin_gameTimer = player.pos.x + 140;
+      let origin_heartTitle = player.pos.x + 124;
+      let origin_heartText = player.pos.x + 146;
+      if (currCam.x < player.pos.x) {
+        camPos(player.pos.x, currCam.y);
+      }
+      if (origin_scoreTitle >= scoreTitle.pos.x) {
+        scoreTitle.pos.x = origin_scoreTitle;
+      }
+      if (origin_scoreText >= scoreText.pos.x) {
+        scoreText.pos.x = origin_scoreText;
+      }
+      if (origin_gameTimer >= gameTimer.pos.x) {
+        gameTimer.pos.x = origin_gameTimer;
+      }
+      if (origin_heartTitle >= heartTitle.pos.x) {
+        heartTitle.pos.x = origin_heartTitle;
+      }
+      if (origin_heartText >= heartText.pos.x) {
+        heartText.pos.x = origin_heartText;
+      }
+    });
+
+    // 魚にあたったら
+    player.onCollide("fish", (fish) => {
+      destroy(fish);
+      updateScore(500);
+    });
+
+    // 家に到着したらゴール
+    player.onCollide("house", (house, side) => {
+      player.isFrozen = true;
+      add([
+        text("Stage clear!", { size: 16 }),
+        pos(toWorld(vec2(180, 120))),
+        color(255, 255, 255),
+        origin("center"),
+        layer('ui'),
+      ]);
+      wait(3, () => {
+        let nextLevel = levelNumber + 1;
+        if (nextLevel >= MAPS.length) {
+          setData("stage"+levelNumber, scoreText.text);
+          go("scoreList");
+        } else {
+          setData("stage"+levelNumber, scoreText.text);
+          go("game", nextLevel);
+        }
+      })
+    });
+
+    // エリア外は死ぬ
+    player.action( () => {
+      if (player.pos.y >= 300) {
+        setData("life", heart-1);
+        heart = getData("life");
+        if (heart == 0) {
+          go('over');
+        } else {
+          go('died');
+        }
+      }
+    });
+
+    // 踏んづけて敵を殺す失敗したら死ぬ
+    player.onCollide("enemy_cat", (enemy_cat) => {
+      if (isJumping){
+        destroy(enemy_cat);
+        updateScore(100);
+      } else {
+        setData("life", heart-1);
+        heart = getData("life");
+        if(heart == 0) {
+          go('over');
+        }else{
+          go('died');
+        }
+      }
+    });
+    player.onCollide("boss_cat", (boss_cat) => {
+      if (isJumping){
+        destroy(boss_cat);
+        updateScore(1000);
+      } else {
+        setData("life", heart-1);
+        heart = getData("life");
+        if(heart == 0) {
+          go('over');
+        }else{
+          go('died');
+        }
+      }
+    });
+
+    // 地に足をつけている
+    player.onCollide("ground", (enemy_cat) => {
+      isJumping = false;
+    });
+    player.onCollide("ground", (boss_cat) => {
+      isJumping = false;
+    });
+
+    let scoreInt = 0;
+    // 頭をブロックにぶつける
+    player.on("headbutt", (obj) => {
+      if (obj.is("questionBox")) {
+        if (obj.is("coinBox")) {
+          let coin = level.spawn("c", obj.gridPos.sub(0, 1));
+          updateScore(200);
+        } else if (obj.is("mushyBox")) {
+          level.spawn("M", obj.gridPos.sub(0, 1));
+        }
+
+        let pos = obj.gridPos;
+        let box = level.spawn("!", pos);
+        destroy(obj);
+      }
+    });
+
+    // スコアを表示
+    const scoreTitle = add ([
+        text("SCORE:", { size: 8, font: "sink"}),
+        pos(220, 10),
+        origin("center"),
+        layer("ui"),
+    ]);
+    const scoreText = add ([
+        text("000000", { size: 8, font: "sink"}),
+        pos(260, 10),
+        origin("center"),
+        layer("ui"),
+    ]);
+    function updateScore(points = 0){
+      scoreInt += points;
+      scoreText.text = scoreInt.toString().padStart(6,0);
+    }
+
+    // 制限時間を表示
+    const gameTimer = add ([
+        text("300", { size: 8, font: "sink"}),
+        pos(300, 10),
+        origin("center"),
+        layer("ui"),
+    ]);
+    function setTimer() {
+      let timer_ID = 0;
+      let time = 300;
+      timer_ID = setInterval(minus, 1000);
+      function minus() {
+        time--;
+        updateTimer(time);
+        if (time == -1) {
+          clearInterval(timer_ID);
+          go('over');
+        }
+      }
+      function updateTimer(time) {
+        gameTimer.text = time;
+      }
+    }
+  }); // scene "game" 終わり
+
+  // 死んだ画面
+  scene("died", () => {
+    add([
+      text("You died", { size: 16 }),
+      pos(vec2(160, 120)),
+      color(255, 255, 255),
+      origin("center"),
+      layer('ui'),
+    ]);
+
+    onKeyDown("enter", () => {
+      go("game",getData("level"));
+    });
+  });
+
+  // ゲームオーバー画面
+  scene("over", () => {
+    add([
+      text("Game over", { size: 16 }),
+      pos(vec2(160, 120)),
+      color(255, 0, 0),
+      origin("center"),
+      layer('ui'),
+    ]);
+
+    onKeyDown("enter", () => {
+      go("game");
+      localStorage.removeItem('stage0');
+      localStorage.removeItem('stage1');
+      localStorage.removeItem('stage2');
+      setData("life", 3);
+      setData("level", 0);
+    });
+  });
+
+
+  // スコア表示画面
+  scene("scoreList", () => {
+    let stage0 = getData("stage0");
+    let stage1 = getData("stage1");
+    let stage2 = getData("stage2");
+    add([
+      text("Congratulations!", { size: 16 }),
+      pos(vec2(157, 100)),
+      origin("center"),
+      color(255, 255, 255),
+    ]);
+    add([
+      text("Stage1:"+stage0+"  Stage2:"+stage1, { size: 16 }),
+      pos(vec2(160, 140)),
+      origin("center"),
+      color(255, 255, 255),
+    ]);
+    add([
+      text("Stage3:"+stage2+"  ", { size: 16 }),
+      pos(vec2(96, 180)),
+      origin("center"),
+      color(255, 255, 255),
+    ]);
+    wait(5, () => {
+      go("start");
+    })
+  });
+
+
+  function log(str){
+    console.log(str);
+  }
+
+  // 敵の動きをパターン化
+  function patrol(distance = 10, speed = 10, dir = 1) {
+    return {
+      id: "patrol",
+      require: ["pos", "area",],
+      startingPos: vec2(0, 0),
+      add() {
+        this.startingPos = this.pos;
+        this.on("collide", (obj, side) => {
+          if (side === "left" || side === "right") {
+            dir = -dir;
+          }
+        });
+        this.flipX(true);
+      },
+      update() {
+        if (Math.abs(this.pos.x - this.startingPos.x) >= distance) {
+          dir = -dir;
+          if (dir == -1) {
+            this.flipX(false);
+          }
+          if(dir == 1){
+            this.flipX(true);
+          }
+        }
+        this.move(speed * dir, 0);
+      },
+    };
+  }
+
+  function enemy() {
+    return {
+      id: "enemy",
+      require: ["pos", "area", "sprite", "patrol"],
+      isAlive: true,
+      update() {
+
+      },
+      squash() {
+        this.isAlive = false;
+        this.unuse("patrol");
+        this.stop();
+        this.use(lifespan(0.1, { fade: 0.1 }));
+      }
+    }
+  }
+
+
+
+  // 後で消す
+  // go("game",2);
+  // go("scoreList");
+
+
+
+
+  // ステージ構成
+  const MAPS = [
+    [
+      "                                                                                                                                    ",
+      "                                                                                                                                    ",
+      "                                                             b                                                                      ",
+      "                                                                                           b                                        ",
+      "                                                                                                                                    ",
+      "                            b                                    --                                                                 ",
+      "         --                                                                                                                         ",
+      "                                                                                           ?                                        ",
+      "                             ---                   -?        ?                                                                      ",
+      "      -?-b-                                             ?                                                                           ",
+      "                                      _                                             -b                                              ",
+      "                                 _    |                               _                         --                                  ",
+      "                           _     |    |                _              |  _                                                          ",
+      "       E                   |     |    |   E   E        |   E          |  |       E                  E        H                      ",
+      "================    ===================================================================    =================================        ",
+      "================    ===================================================================    =================================        ",
+    ],
+    [
+      "                                                                                                                                    ",
+      "                                                                                                                                    ",
+      "                                                                                                                                    ",
+      "                                                                                                                                    ",
+      "                                                                           -b-                                                      ",
+      "                                                        ?                                                                           ",
+      "                                                                                                                                    ",
+      "                             -?                                                   -?-                                               ",
+      "                                    -?-                                                                                             ",
+      "      -b---                                             --    --             -?-                                                    ",
+      "                           -?-b-                                                          ??                                        ",
+      "                                                                          -                                                         ",
+      "       _                                            _                                                                               ",
+      "       |E                   E                       |         B     E                E             E         H                      ",
+      "================     =====================    ==================================  ===========  =============================        ",
+      "================     =====================    ==================================  ===========  =============================        ",
+    ],
+    [
+      "                                               ",
+      "                                               ",
+      "                                               ",
+      "                                               ",
+      "                                               ",
+      "                                               ",
+      "                                               ",
+      "                                               ",
+      "      FFFFFFFFFFFFFF                           ",
+      "      FFFFFFFFFFFFFF                           ",
+      "      FFFFFFFFFFFFFF                           ",
+      "      FFFFFFFFFFFFFF                           ",
+      "      FFFFFFFFFFFFFF                           ",
+      "                        B          H           ",
+      "===============================================",
+      "===============================================",
+    ]
+  ];
+
+  const levelConf = {
+    // grid size
+    width: 16,
+    height: 16,
+    pos: vec2(0, 0),
+    // define each object as a list of components
+    "=": () => [ sprite("ground"), area(), solid(), origin("bot"), "ground" ],
+    "-": () => [ sprite("brick"), area(), solid(), origin("bot"), "brick" ],
+    "H": () => [ sprite("house"), area({ width: 1, height: 240 }), origin("bot"), scale(3), "house" ],
+    "?": () => [ sprite("questionBox"), area(), solid(), origin("bot"), 'questionBox', 'coinBox' ],
+    "b": () => [ sprite("questionBox"), area(), solid(), origin("bot"), 'questionBox', 'mushyBox' ],
+    "!": () => [ sprite("emptyBox"), area(), solid(), origin("bot"), 'emptyBox' ],
+    "c": () => [ sprite("coin"), area(), solid(), cleanup(), lifespan(0.4, { fade: 0.01 }), origin("bot"), "coin" ],
+    "F": () => [ sprite("fish"), area(), scale(0.2),cleanup(), origin("center"), "fish" ],
+    "M": () => [ sprite("fish"), area(), solid(), patrol(1000,30), body(), scale(0.2),cleanup(), origin("bot"), "fish" ],
+    "|": () => [ sprite("pipeBottom"), area(), solid(), origin("bot"), "pipe" ],
+    "_": () => [ sprite("pipeTop"), area(), solid(), origin("bot"), "pipe" ],
+    "D": () => [ sprite("pipe"), area(), solid(), origin("bot"), "pipe" ],
+    "B": () => [ sprite("boss_cat"), area({ width: 16, height: 16 }), solid(), body(), patrol(40,20), enemy(), origin("bot"), "boss_cat" ],
+    "E": () => [ sprite("enemy_cat"), area({ width: 16, height: 16 }), solid(), body(), patrol(40,20), enemy(), origin("bot"), "enemy_cat" ],
+    "p": () => [ sprite("cat", { frame: 0 }), area({ width: 16, height: 16 }), body(),  origin("bot"), "cat" ]
+  };
+
+  
+</script>
+</body>
+</html>
